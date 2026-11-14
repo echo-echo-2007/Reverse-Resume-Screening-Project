@@ -1,0 +1,4 @@
+# 二进制文档：禁用文本 diff 与行尾转换
+# 原因：Windows 版 Git 自带属性会把 *.docx 交给 astextplain，而该脚本依赖的 file 命令在本机缺失，
+# 导致 git diff / git show 报 "astextplain: file: command not found"、"unable to read files to diff"。
+*.docx binary

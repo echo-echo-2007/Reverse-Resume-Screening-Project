@@ -1,0 +1,120 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model applications {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  job_id         BigInt    @db.UnsignedBigInt
+  resume_id      BigInt    @db.UnsignedBigInt
+  seeker_user_id BigInt    @db.UnsignedBigInt
+  status         String    @default("pending") @db.VarChar(24)
+  reject_stage   String?   @db.VarChar(16)
+  reject_reason  String?   @db.VarChar(64)
+  reject_note    String?   @db.VarChar(255)
+  applied_at     DateTime  @default(now()) @db.DateTime(0)
+  screened_at    DateTime? @db.DateTime(0)
+  hr_viewed_at   DateTime? @db.DateTime(0)
+  updated_at     DateTime  @default(now()) @db.DateTime(0)
+  jobs           jobs      @relation(fields: [job_id], references: [id], onUpdate: Restrict, map: "fk_applications_job")
+  resumes        resumes   @relation(fields: [resume_id, seeker_user_id], references: [id, user_id], onUpdate: Restrict, map: "fk_applications_resume_owner")
+
+  @@unique([job_id, resume_id], map: "uk_applications_job_resume")
+  @@index([job_id, status, applied_at], map: "idx_applications_job_status")
+  @@index([resume_id, seeker_user_id], map: "idx_applications_resume_seeker")
+  @@index([seeker_user_id, status, applied_at], map: "idx_applications_seeker")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model companies {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String   @db.VarChar(200)
+  description String?  @db.Text
+  industry    String?  @db.VarChar(64)
+  created_at  DateTime @default(now()) @db.DateTime(0)
+  updated_at  DateTime @default(now()) @db.DateTime(0)
+  jobs        jobs[]
+  users       users[]
+
+  @@index([name], map: "idx_companies_name")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model jobs {
+  id                    BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  company_id            BigInt         @db.UnsignedBigInt
+  hr_user_id            BigInt         @db.UnsignedBigInt
+  title                 String         @db.VarChar(128)
+  department            String?        @db.VarChar(64)
+  salary_min            Int            @default(0) @db.UnsignedInt
+  salary_max            Int            @default(0) @db.UnsignedInt
+  min_education_level   Int            @default(0) @db.UnsignedTinyInt
+  min_experience_months Int            @default(0) @db.UnsignedInt
+  city_code             String?        @db.Char(6)
+  city_name             String?        @db.VarChar(64)
+  description           String?        @db.MediumText
+  requirements          String?        @db.MediumText
+  status                String         @default("draft") @db.VarChar(16)
+  created_at            DateTime       @default(now()) @db.DateTime(0)
+  updated_at            DateTime       @default(now()) @db.DateTime(0)
+  applications          applications[]
+  companies             companies      @relation(fields: [company_id], references: [id], onUpdate: Restrict, map: "fk_jobs_company")
+  users                 users          @relation(fields: [hr_user_id, company_id], references: [id, company_id], onUpdate: Restrict, map: "fk_jobs_hr_company")
+
+  @@index([company_id, status, created_at], map: "idx_jobs_company_status")
+  @@index([hr_user_id, company_id], map: "idx_jobs_hr_company")
+  @@index([status, city_code, min_education_level, min_experience_months], map: "idx_jobs_screening")
+  @@fulltext([title, description, requirements], map: "ft_jobs_text")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model resumes {
+  id                      BigInt         @id @default(autoincrement()) @db.UnsignedBigInt
+  user_id                 BigInt         @unique(map: "uk_resumes_user") @db.UnsignedBigInt
+  full_name               String         @db.VarChar(64)
+  contact_phone           String         @db.VarChar(20)
+  contact_email           String?        @db.VarChar(255)
+  expected_city_code      String?        @db.Char(6)
+  expected_city_name      String?        @db.VarChar(64)
+  highest_education_level Int            @db.UnsignedTinyInt
+  school                  String?        @db.VarChar(128)
+  graduation_year         Int?           @db.UnsignedSmallInt
+  work_months             Int            @default(0) @db.UnsignedInt
+  work_experience         String?        @db.MediumText
+  self_evaluation         String?        @db.Text
+  created_at              DateTime       @default(now()) @db.DateTime(0)
+  updated_at              DateTime       @default(now()) @db.DateTime(0)
+  applications            applications[]
+  users                   users          @relation(fields: [user_id], references: [id], onUpdate: Restrict, map: "fk_resumes_user")
+
+  @@unique([id, user_id], map: "uk_resumes_id_user")
+  @@index([expected_city_code, highest_education_level, work_months], map: "idx_resumes_screening")
+  @@fulltext([work_experience, self_evaluation], map: "ft_resumes_text")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+model users {
+  id            BigInt     @id @default(autoincrement()) @db.UnsignedBigInt
+  role          String     @db.VarChar(16)
+  company_id    BigInt?    @db.UnsignedBigInt
+  name          String     @db.VarChar(64)
+  phone         String     @unique(map: "uk_users_phone") @db.VarChar(20)
+  password_hash String     @db.VarChar(255)
+  created_at    DateTime   @default(now()) @db.DateTime(0)
+  updated_at    DateTime   @default(now()) @db.DateTime(0)
+  jobs          jobs[]
+  resumes       resumes?
+  companies     companies? @relation(fields: [company_id], references: [id], onDelete: Restrict, onUpdate: Restrict, map: "fk_users_company")
+
+  @@unique([id, company_id], map: "uk_users_id_company")
+  @@index([company_id, role], map: "idx_users_company_role")
+}
