@@ -1,0 +1,357 @@
+@host = http://localhost:3000
+
+# 使用方式：复制本文件为 test.http（test.http 已在 .gitignore 中，不会被提交）
+#   Windows PowerShell: Copy-Item test.http.example test.http
+#   Git Bash:           cp test.http.example test.http
+
+# 本地测试用密码，请自行在下面一行填写，不要把真实密码提交进仓库
+@password = 填写你的测试密码
+
+# 手机号后缀：每次重跑流水线改这里（否则会因手机号已注册返回 409）
+# 注意手机号必须是 11 位且以 13-19 开头
+@suffix = 0001
+
+# 三个手机号由后缀拼出，形如 13800000001 / 13900000001 / 13700000001 / 13600000001
+###
+# ============================================================
+# 第 0 步：健康检查
+# ============================================================
+
+### 0.1 健康检查（应返回 {"ok":true}）
+GET {{host}}/api/health
+
+
+# ============================================================
+# 第 1 步：注册 HR + 发布职位
+# ============================================================
+
+### 1.1 注册 HR（事务：先建企业，再建 HR 用户）
+# @name hrReg
+POST {{host}}/api/register
+Content-Type: application/json
+
+{
+  "role": "hr",
+  "phone": "1380000{{suffix}}",
+  "password": "{{password}}",
+  "name": "张招聘",
+  "company_name": "星辰科技有限公司 {{suffix}}"
+}
+
+### 1.2 HR 登录（拿到 token）
+# @name hrLogin
+POST {{host}}/api/login
+Content-Type: application/json
+
+{
+  "phone": "1380000{{suffix}}",
+  "password": "{{password}}"
+}
+
+### 1.3 HR 新建职位（status 由后端强制 published）
+# 职位硬条件：本科(3) / 24 个月经验 / 上海(310100)
+# @name createJob
+POST {{host}}/api/jobs
+Content-Type: application/json
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+{
+  "title": "前端工程师 {{suffix}}",
+  "department": "技术部",
+  "salary_min": 15000,
+  "salary_max": 25000,
+  "min_education_level": 3,
+  "min_experience_months": 24,
+  "city_code": "310100",
+  "city_name": "上海",
+  "description": "负责公司核心产品的前端开发",
+  "requirements": "熟悉 React / TypeScript"
+}
+
+### 1.4 HR 修改职位（只改薪资上限）
+# @name patchJob
+PATCH {{host}}/api/jobs/{{createJob.response.body.$.job.id}}
+Content-Type: application/json
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+{
+  "salary_max": 28000
+}
+
+
+# ============================================================
+# 第 2 步：求职者 A —— 完全符合，应初筛通过
+# ============================================================
+
+### 2.1 注册求职者 A
+# @name seekerA
+POST {{host}}/api/register
+Content-Type: application/json
+
+{
+  "role": "seeker",
+  "phone": "1390000{{suffix}}",
+  "password": "{{password}}",
+  "name": "赵通过"
+}
+
+### 2.2 求职者 A 填简历（硕士 4 / 36 个月 / 上海）
+# @name resumeA
+PUT {{host}}/api/resume
+Content-Type: application/json
+Authorization: Bearer {{seekerA.response.body.$.token}}
+
+{
+  "full_name": "赵通过",
+  "contact_phone": "1390000{{suffix}}",
+  "contact_email": "zhao@test.com",
+  "expected_city_code": "310100",
+  "expected_city_name": "上海",
+  "highest_education_level": 4,
+  "school": "某某大学",
+  "graduation_year": 2020,
+  "work_months": 36,
+  "work_experience": "3 年前端开发，负责过中后台系统",
+  "self_evaluation": "学习能力强"
+}
+
+### 2.3 求职者 A 投递职位
+# @name applyA
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/apply
+Content-Type: application/json
+Authorization: Bearer {{seekerA.response.body.$.token}}
+
+
+# ============================================================
+# 第 3 步：求职者 B —— 学历不达标（大专 2），应 rejected / education
+# ============================================================
+
+### 3.1 注册求职者 B
+# @name seekerB
+POST {{host}}/api/register
+Content-Type: application/json
+
+{
+  "role": "seeker",
+  "phone": "1370000{{suffix}}",
+  "password": "{{password}}",
+  "name": "钱学历"
+}
+
+### 3.2 求职者 B 填简历（大专 2 / 60 个月 / 上海）
+# @name resumeB
+PUT {{host}}/api/resume
+Content-Type: application/json
+Authorization: Bearer {{seekerB.response.body.$.token}}
+
+{
+  "full_name": "钱学历",
+  "contact_phone": "1370000{{suffix}}",
+  "expected_city_code": "310100",
+  "expected_city_name": "上海",
+  "highest_education_level": 2,
+  "school": "某某职业技术学院",
+  "graduation_year": 2016,
+  "work_months": 60,
+  "work_experience": "5 年前端开发"
+}
+
+### 3.3 求职者 B 投递职位
+# @name applyB
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/apply
+Content-Type: application/json
+Authorization: Bearer {{seekerB.response.body.$.token}}
+
+
+# ============================================================
+# 第 4 步：求职者 C —— 经验不足（12 个月），应 rejected / experience
+# ============================================================
+
+### 4.1 注册求职者 C
+# @name seekerC
+POST {{host}}/api/register
+Content-Type: application/json
+
+{
+  "role": "seeker",
+  "phone": "1360000{{suffix}}",
+  "password": "{{password}}",
+  "name": "孙经验"
+}
+
+### 4.2 求职者 C 填简历（硕士 4 / 12 个月 / 上海）
+# @name resumeC
+PUT {{host}}/api/resume
+Content-Type: application/json
+Authorization: Bearer {{seekerC.response.body.$.token}}
+
+{
+  "full_name": "孙经验",
+  "contact_phone": "1360000{{suffix}}",
+  "expected_city_code": "310100",
+  "expected_city_name": "上海",
+  "highest_education_level": 4,
+  "school": "某某大学",
+  "graduation_year": 2025,
+  "work_months": 12,
+  "work_experience": "1 年前端开发"
+}
+
+### 4.3 求职者 C 投递职位
+# @name applyC
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/apply
+Content-Type: application/json
+Authorization: Bearer {{seekerC.response.body.$.token}}
+
+
+# ============================================================
+# 第 5 步：求职者 D —— 城市不匹配（北京 110100），应 rejected / city
+# ============================================================
+
+### 5.1 注册求职者 D
+# @name seekerD
+POST {{host}}/api/register
+Content-Type: application/json
+
+{
+  "role": "seeker",
+  "phone": "1350000{{suffix}}",
+  "password": "{{password}}",
+  "name": "李城市"
+}
+
+### 5.2 求职者 D 填简历（硕士 4 / 60 个月 / 北京）
+# @name resumeD
+PUT {{host}}/api/resume
+Content-Type: application/json
+Authorization: Bearer {{seekerD.response.body.$.token}}
+
+{
+  "full_name": "李城市",
+  "contact_phone": "1350000{{suffix}}",
+  "expected_city_code": "110100",
+  "expected_city_name": "北京",
+  "highest_education_level": 4,
+  "school": "某某大学",
+  "graduation_year": 2018,
+  "work_months": 60,
+  "work_experience": "5 年前端开发"
+}
+
+### 5.3 求职者 D 投递职位
+# @name applyD
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/apply
+Content-Type: application/json
+Authorization: Bearer {{seekerD.response.body.$.token}}
+
+
+# ============================================================
+# 第 6 步：HR 触发初筛
+# ============================================================
+
+### 6.1 触发初筛
+# 预期返回 total=4，passed=1（赵通过），rejected=3
+# reject_reason 依次为 education / experience / city
+# @name screen
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/screen
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+### 6.2 重复触发初筛
+# 预期返回 total=0：已 screened / rejected 的不重复处理
+# @name screenAgain
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/screen
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+
+# ============================================================
+# 第 7 步：查看初筛结果
+# ============================================================
+
+### 7.1 HR 查看该职位全部投递（含简历明细）
+# 预期 4 条：1 条 screened，3 条 rejected 且 reject_stage 均为 sql
+# @name hrViewApplications
+GET {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/applications
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+### 7.2 求职者 A 查看我的投递（应为 screened + 职位/公司信息）
+GET {{host}}/api/my/applications
+Authorization: Bearer {{seekerA.response.body.$.token}}
+
+### 7.3 求职者 B 查看我的投递（应为 rejected / education）
+GET {{host}}/api/my/applications
+Authorization: Bearer {{seekerB.response.body.$.token}}
+
+
+# ============================================================
+# 第 8 步：HR 手动处理（初筛通过后的流转）
+# ============================================================
+
+### 8.1 把 A 的投递改为 interview
+# @name toInterview
+PATCH {{host}}/api/applications/{{applyA.response.body.$.application.id}}/status
+Content-Type: application/json
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+{
+  "status": "interview"
+}
+
+### 8.2 把 A 的投递改为 hired
+PATCH {{host}}/api/applications/{{applyA.response.body.$.application.id}}/status
+Content-Type: application/json
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+{
+  "status": "hired"
+}
+
+### 8.3 非法流转：hired 不能再改（应 400）
+PATCH {{host}}/api/applications/{{applyA.response.body.$.application.id}}/status
+Content-Type: application/json
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+{
+  "status": "screened"
+}
+
+
+# ============================================================
+# 第 9 步：越权与边界校验（可选，但建议跑）
+# ============================================================
+
+### 9.1 求职者建职位（应 403）
+POST {{host}}/api/jobs
+Content-Type: application/json
+Authorization: Bearer {{seekerA.response.body.$.token}}
+
+{
+  "title": "越权测试"
+}
+
+### 9.2 求职者触发初筛（应 403）
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/screen
+Authorization: Bearer {{seekerA.response.body.$.token}}
+
+### 9.3 重复投递（应 409）
+POST {{host}}/api/jobs/{{createJob.response.body.$.job.id}}/apply
+Content-Type: application/json
+Authorization: Bearer {{seekerA.response.body.$.token}}
+
+### 9.4 修改不存在的职位（应 404）
+PATCH {{host}}/api/jobs/999999999
+Content-Type: application/json
+Authorization: Bearer {{hrLogin.response.body.$.token}}
+
+{
+  "title": "不存在"
+}
+
+### 9.5 修改别人企业的职位（应 403，用 B 的身份伪造不了 HR，这里用未绑定企业的边界）
+# 说明：真正的跨企业越权需再注册一家企业的 HR 才能构造，命令行脚本里已验证
+PATCH {{host}}/api/jobs/{{createJob.response.body.$.job.id}}
+Content-Type: application/json
+Authorization: Bearer {{seekerB.response.body.$.token}}
+
+{
+  "title": "越权改职位"
+}
