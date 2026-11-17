@@ -150,4 +150,201 @@ router.get('/jobs/:id', optionalAuth, async (req, res) => {
   }
 });
 
+// PATCH /api/jobs/:id  HR 修改自己的职位（只能改本企业职位）
+router.patch('/jobs/:id', requireAuth, requireRole('hr'), async (req, res) => {
+  try {
+    const id = parseId(req.params.id);
+    if (!id) return res.status(400).json({ error: '职位 id 不合法' });
+
+    const existing = await prisma.jobs.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        company_id: true,
+        salary_min: true,
+        salary_max: true,
+        min_education_level: true,
+        min_experience_months: true,
+      },
+    });
+    if (!existing) return res.status(404).json({ error: '职位不存在' });
+    if (!req.user.companyId || String(existing.company_id) !== String(req.user.companyId)) {
+      return res.status(403).json({ error: '无权修改该职位' });
+    }
+
+    const b = req.body || {};
+    const data = {};
+
+    if (b.title !== undefined) {
+      if (typeof b.title !== 'string' || !b.title.trim()) {
+        return res.status(400).json({ error: 'title 不能为空' });
+      }
+      data.title = b.title.trim().slice(0, 128);
+    }
+
+    // 可空文本：传 null / 空串都统一存 NULL
+    const nullIfBlank = (v, max) =>
+      v === null || v === undefined || String(v).trim() === '' ? null : String(v).trim().slice(0, max);
+
+    if (b.department !== undefined) data.department = nullIfBlank(b.department, 64);
+    if (b.city_code !== undefined) data.city_code = nullIfBlank(b.city_code, 6);
+    if (b.city_name !== undefined) data.city_name = nullIfBlank(b.city_name, 64);
+    if (b.description !== undefined) data.description = b.description === null ? null : String(b.description);
+    if (b.requirements !== undefined) data.requirements = b.requirements === null ? null : String(b.requirements);
+
+    if (b.salary_min !== undefined) {
+      const v = toInt(b.salary_min, null);
+      if (v === null || v < 0) return res.status(400).json({ error: 'salary_min 不合法' });
+      data.salary_min = v;
+    }
+    if (b.salary_max !== undefined) {
+      const v = toInt(b.salary_max, null);
+      if (v === null || v < 0) return res.status(400).json({ error: 'salary_max 不合法' });
+      data.salary_max = v;
+    }
+    if (b.min_education_level !== undefined) {
+      const v = toInt(b.min_education_level, null);
+      if (v === null || v < 0 || v > 5) {
+        return res.status(400).json({ error: 'min_education_level 需在 0-5 之间' });
+      }
+      data.min_education_level = v;
+    }
+    if (b.min_experience_months !== undefined) {
+      const v = toInt(b.min_experience_months, null);
+      if (v === null || v < 0) return res.status(400).json({ error: 'min_experience_months 不能为负' });
+      data.min_experience_months = v;
+    }
+
+    // 只改单边时，用合并后的值校验区间，避免把薪资区间改坏
+    const nextMin = data.salary_min !== undefined ? data.salary_min : existing.salary_min;
+    const nextMax = data.salary_max !== undefined ? data.salary_max : existing.salary_max;
+    if (nextMax < nextMin) {
+      return res.status(400).json({ error: '薪资区间不合法（salary_max 需 >= salary_min）' });
+    }
+
+    // company_id / hr_user_id / status 一律不接受前端传入：V1 职位创建即 published
+    if (Object.keys(data).length === 0) {
+      return res.status(400).json({ error: '没有需要更新的字段（status/company_id/hr_user_id 不可修改）' });
+    }
+
+    const job = await prisma.jobs.update({ where: { id }, data, select: JOB_SELECT });
+    return res.json({ job });
+  } catch (err) {
+    console.error('[jobs.update]', err);
+    return res.status(500).json({ error: '修改职位失败' });
+  }
+});
+
+// POST /api/jobs/:id/screen  HR 触发硬条件初筛（只处理 pending）
+router.post('/jobs/:id/screen', requireAuth, requireRole('hr'), async (req, res) => {
+  try {
+    const jobId = parseId(req.params.id);
+    if (!jobId) return res.status(400).json({ error: '职位 id 不合法' });
+
+    const job = await prisma.jobs.findUnique({
+      where: { id: jobId },
+      select: {
+        id: true,
+        company_id: true,
+        min_education_level: true,
+        min_experience_months: true,
+        city_code: true,
+      },
+    });
+    if (!job) return res.status(404).json({ error: '职位不存在' });
+    if (!req.user.companyId || String(job.company_id) !== String(req.user.companyId)) {
+      return res.status(403).json({ error: '无权对该职位执行初筛' });
+    }
+
+    // 只取 pending，已 screened / rejected 的不重复处理
+    const pending = await prisma.applications.findMany({
+      where: { job_id: jobId, status: 'pending' },
+      select: {
+        id: true,
+        resumes: {
+          select: {
+            full_name: true,
+            highest_education_level: true,
+            work_months: true,
+            expected_city_code: true,
+          },
+        },
+      },
+      orderBy: { applied_at: 'asc' },
+    });
+
+    if (pending.length === 0) {
+      return res.json({ job_id: job.id, total: 0, passed: 0, rejected: 0, results: [] });
+    }
+
+    const now = new Date();
+    const ops = [];
+    const results = [];
+
+    for (const app of pending) {
+      const resume = app.resumes || {};
+      let reason = null;
+      let note = null;
+
+      // 按文档顺序判定：学历 -> 经验 -> 城市，命中第一个即止
+      if ((resume.highest_education_level ?? 0) < job.min_education_level) {
+        reason = 'education';
+        note = `学历不满足：职位要求 ${job.min_education_level}，简历 ${resume.highest_education_level ?? 0}`;
+      } else if ((resume.work_months ?? 0) < job.min_experience_months) {
+        reason = 'experience';
+        note = `经验不满足：职位要求 ${job.min_experience_months} 个月，简历 ${resume.work_months ?? 0} 个月`;
+      } else if (
+        job.city_code &&
+        resume.expected_city_code &&
+        String(job.city_code) !== String(resume.expected_city_code)
+      ) {
+        // 任意一边为空则跳过城市判断
+        reason = 'city';
+        note = `城市不匹配：职位 ${job.city_code}，期望 ${resume.expected_city_code}`;
+      }
+
+      const data = reason
+        ? {
+            status: 'rejected',
+            reject_stage: 'sql',
+            reject_reason: reason,
+            reject_note: note.slice(0, 255),
+            screened_at: now,
+          }
+        : {
+            status: 'screened',
+            reject_stage: null,
+            reject_reason: null,
+            reject_note: null,
+            screened_at: now,
+          };
+
+      ops.push(prisma.applications.update({ where: { id: app.id }, data }));
+      results.push({
+        application_id: app.id,
+        full_name: resume.full_name ?? null,
+        status: data.status,
+        reject_stage: data.reject_stage,
+        reject_reason: data.reject_reason,
+        reject_note: data.reject_note,
+      });
+    }
+
+    // 批量写入，任一条失败整体回滚
+    await prisma.$transaction(ops);
+
+    const rejected = results.filter((r) => r.status === 'rejected').length;
+    return res.json({
+      job_id: job.id,
+      total: results.length,
+      passed: results.length - rejected,
+      rejected,
+      results,
+    });
+  } catch (err) {
+    console.error('[jobs.screen]', err);
+    return res.status(500).json({ error: '初筛执行失败' });
+  }
+});
+
 module.exports = { router };
