@@ -13,4 +13,7 @@ server/test.http
 # 前端构建产物
 web/dist/
 
+# 文档流水线中间产物（md/html 草稿，随时可再生）
+output/
+
 *.http

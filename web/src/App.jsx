@@ -4,6 +4,7 @@ import { useAuth } from './auth.jsx';
 import Login from './pages/Login.jsx';
 import JobList from './pages/JobList.jsx';
 import JobDetail from './pages/JobDetail.jsx';
+import MyResume from './pages/MyResume.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
 
 // 已登录用户访问 /login 时直接回首页
@@ -43,7 +44,7 @@ export default function App() {
           path="my/resume"
           element={
             <RequireRole need="seeker">
-              <ComingSoon title="我的简历" items={['简历表单（新增 / 修改共用）', '学历、经验、期望城市']} />
+              <MyResume />
             </RequireRole>
           }
         />
