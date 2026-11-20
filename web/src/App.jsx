@@ -5,6 +5,7 @@ import Login from './pages/Login.jsx';
 import JobList from './pages/JobList.jsx';
 import JobDetail from './pages/JobDetail.jsx';
 import MyResume from './pages/MyResume.jsx';
+import MyApplications from './pages/MyApplications.jsx';
 import ComingSoon from './pages/ComingSoon.jsx';
 
 // 已登录用户访问 /login 时直接回首页
@@ -52,7 +53,7 @@ export default function App() {
           path="my/applications"
           element={
             <RequireRole need="seeker">
-              <ComingSoon title="我的投递" items={['投递记录列表', '状态标签与拒绝原因']} />
+              <MyApplications />
             </RequireRole>
           }
         />

@@ -44,9 +44,15 @@ export const STATUS_LABEL = {
 export const STATUS_STYLE = {
   pending: 'bg-slate-100 text-slate-600',
   screened: 'bg-sky-50 text-sky-700',
-  rejected: 'bg-red-50 text-red-700',
+  rejected: 'bg-wine-50 text-wine-700',
   interview: 'bg-indigo-50 text-indigo-700',
   hired: 'bg-emerald-50 text-emerald-700',
+};
+
+// 拒绝原因：谁拒的 + 为什么
+export const REJECT_STAGE_LABEL = {
+  sql: '系统初筛',
+  manual: 'HR 操作',
 };
 
 export const REJECT_REASON_LABEL = {
@@ -67,4 +73,27 @@ export function formatMonths(months) {
   if (!months) return '经验不限';
   if (months % 12 === 0) return `${months / 12} 年`;
   return `${months} 个月`;
+}
+
+// 短时间「MM-DD HH:mm」：库里存 UTC、接口返回带 Z，new Date() 会自动转成本地时区
+export function formatDateTimeShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// 发布时间：今天 / 昨天 / N 天前 / MM-DD，超过一周直接给日期
+export function formatRelativeDay(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dayStart = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((dayStart(new Date()) - dayStart(d)) / 86400000);
+  if (diff <= 0) return '今天发布';
+  if (diff === 1) return '昨天发布';
+  if (diff < 7) return `${diff} 天前发布`;
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} 发布`;
 }

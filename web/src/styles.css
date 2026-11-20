@@ -26,6 +26,16 @@
   --color-brown-900: #3b2513;
 }
 
+/* 拒绝状态用酒红，比正红稳重一些 */
+@theme {
+  --color-wine-50: #fbf1f2;
+  --color-wine-100: #f6e0e3;
+  --color-wine-200: #eec3c8;
+  --color-wine-600: #9b3b45;
+  --color-wine-700: #8c2f39;
+  --color-wine-800: #74262f;
+}
+
 /* 自定义基础样式必须放进 @layer base，
    否则无层级样式会盖住 Tailwind 的 utilities（例如 text-white） */
 @layer base {

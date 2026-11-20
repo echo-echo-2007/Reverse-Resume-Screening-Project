@@ -42,7 +42,12 @@ async function request(path, { method = 'GET', body, auth = true } = {}) {
   }
 
   if (!res.ok) {
-    throw new ApiError((data && data.error) || `请求失败（${res.status}）`, res.status);
+    // 后端没起时，Vite 代理会直接回 500 且没有 JSON body，这里给一句人话
+    const fallback =
+      !data && res.status >= 500
+        ? '服务暂时不可用，请确认后端已启动（3000 端口）'
+        : `请求失败（${res.status}）`;
+    throw new ApiError((data && data.error) || fallback, res.status);
   }
   return data;
 }
