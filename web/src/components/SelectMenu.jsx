@@ -6,7 +6,11 @@ import { useEffect, useRef, useState } from 'react';
  * 为什么不用原生 <select>：原生弹出层由浏览器绘制，位置不受页面 CSS 控制，
  * 在缩放/内嵌预览下会出现错位，个别情况下还会带着页面一起滚动。
  * 这里改成绝对定位的自绘面板——面板挂在按钮正下方，不占文档流，
- * 所以展开/收起都不会推动下方列表，也不会改变滚动位置。
+ * 所以展开/收起都不会推动下方内容，也不会改变滚动位置。
+ *
+ * variant：
+ * - filter：筛选栏用，选中后按钮变淡橙底加粗
+ * - field：表单用，外观对齐 inputClass，空值时文字偏灰
  */
 export default function SelectMenu({
   value,
@@ -14,6 +18,7 @@ export default function SelectMenu({
   onChange,
   label,
   className = '',
+  variant = 'filter',
   disabled = false,
 }) {
   const [open, setOpen] = useState(false);
@@ -124,6 +129,22 @@ export default function SelectMenu({
   };
 
   const isActive = value !== '';
+  const isFilter = variant === 'filter';
+
+  const buttonClass = [
+    'flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm outline-none transition',
+    isFilter
+      ? isActive
+        ? 'border-brand-300 bg-brand-50/60 font-medium text-brand-800'
+        : 'border-slate-200 bg-white text-slate-700'
+      : `text-left ${isActive ? 'text-slate-800' : 'text-slate-400'}`,
+    !isFilter ? 'border-slate-200 bg-white' : '',
+    'hover:border-brand-200',
+    open ? 'border-brand-400 ring-2 ring-brand-100' : '',
+    disabled ? 'cursor-not-allowed opacity-60' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
@@ -137,13 +158,7 @@ export default function SelectMenu({
         disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={onKeyDown}
-        className={`flex w-full items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm outline-none transition ${
-          isActive
-            ? 'border-brand-300 bg-brand-50/60 font-medium text-brand-800'
-            : 'border-slate-200 bg-white text-slate-700 hover:border-brand-200'
-        } ${open ? 'border-brand-400 ring-2 ring-brand-100' : ''} ${
-          disabled ? 'cursor-not-allowed opacity-60' : ''
-        }`}
+        className={buttonClass}
       >
         <span className="truncate">{current?.label ?? ''}</span>
         <svg

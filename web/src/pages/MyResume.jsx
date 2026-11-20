@@ -2,9 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
 import Field, { inputClass } from '../components/Field.jsx';
+import SelectMenu from '../components/SelectMenu.jsx';
 import { CITY_OPTIONS, EDU_OPTIONS } from '../constants.js';
 
 const CURRENT_YEAR = new Date().getFullYear();
+
+// 表单里统一用字符串，所以下拉的 value 也统一转成字符串
+const CITY_FIELD = [
+  { value: '', label: '不限' },
+  ...CITY_OPTIONS.map((city) => ({ value: city.code, label: city.name })),
+];
+const EDU_FIELD = [
+  { value: '', label: '请选择' },
+  ...EDU_OPTIONS.map((item) => ({ value: String(item.value), label: item.label })),
+];
 
 // 表单里统一用字符串，提交时再转成接口要的类型；
 // work_years 是「年」，库里存 work_months（月），提交时 ×12
@@ -198,12 +209,13 @@ export default function MyResume() {
     return () => document.removeEventListener('click', onClick, true);
   }, [dirty]);
 
-  const update = (key) => (e) => {
-    const value = e.target.value;
+  const setValue = (key, value) => {
     setForm((prev) => ({ ...prev, [key]: value }));
     if (errors[key]) setErrors((prev) => ({ ...prev, [key]: '' }));
     setJustSaved(false);
   };
+
+  const update = (key) => (e) => setValue(key, e.target.value);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -299,34 +311,24 @@ export default function MyResume() {
               />
             </Field>
 
-            <Field label="期望城市" hint="选填">
-              <select
-                className={inputClass}
+            <Field label="期望城市" hint="选填" as="div">
+              <SelectMenu
+                label="期望城市"
+                variant="field"
                 value={form.expected_city_code}
-                onChange={update('expected_city_code')}
-              >
-                <option value="">不限</option>
-                {CITY_OPTIONS.map((city) => (
-                  <option key={city.code} value={city.code}>
-                    {city.name}
-                  </option>
-                ))}
-              </select>
+                options={CITY_FIELD}
+                onChange={(v) => setValue('expected_city_code', v)}
+              />
             </Field>
 
-            <Field label="最高学历" required error={errors.highest_education_level}>
-              <select
-                className={inputClass}
+            <Field label="最高学历" required error={errors.highest_education_level} as="div">
+              <SelectMenu
+                label="最高学历"
+                variant="field"
                 value={form.highest_education_level}
-                onChange={update('highest_education_level')}
-              >
-                <option value="">请选择</option>
-                {EDU_OPTIONS.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
+                options={EDU_FIELD}
+                onChange={(v) => setValue('highest_education_level', v)}
+              />
             </Field>
           </div>
         </Card>

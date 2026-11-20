@@ -1,7 +1,10 @@
 // 表单行：标签 + 控件 + 错误提示
-export default function Field({ label, hint, error, required, children }) {
+// as 默认是 label（点标签文字能把焦点带到控件上）；
+// 控件本身是 button 时（比如自绘下拉）要传 as="div"：
+// label 会把内部非控件元素的点击转发给控件，等于选完选项又把面板点开。
+export default function Field({ label, hint, error, required, children, as: Tag = 'label' }) {
   return (
-    <label className="block">
+    <Tag className="block">
       <span className="mb-1.5 flex items-center gap-1 text-sm font-medium text-slate-700">
         {label}
         {required && <span className="text-red-500">*</span>}
@@ -9,7 +12,7 @@ export default function Field({ label, hint, error, required, children }) {
       </span>
       {children}
       {error && <span className="mt-1 block text-xs text-red-600">{error}</span>}
-    </label>
+    </Tag>
   );
 }
 
