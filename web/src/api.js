@@ -67,7 +67,6 @@ export const api = {
   getJob: (id) => request(`/jobs/${id}`),
   createJob: (payload) => request('/jobs', { method: 'POST', body: payload }),
   updateJob: (id, payload) => request(`/jobs/${id}`, { method: 'PATCH', body: payload }),
-  screenJob: (id) => request(`/jobs/${id}/screen`, { method: 'POST' }),
 
   // 简历
   getMyResume: () => request('/resume'),
@@ -79,4 +78,9 @@ export const api = {
   jobApplications: (jobId) => request(`/jobs/${jobId}/applications`),
   updateApplicationStatus: (id, payload) =>
     request(`/applications/${id}/status`, { method: 'PATCH', body: payload }),
+
+  // HR 工作台
+  hrOverview: () => request('/hr/overview'),
+  hrApplications: (params = {}) => request(`/hr/applications${qs(params)}`),
+  hrApplicationDetail: (id) => request(`/hr/applications/${id}`),
 };

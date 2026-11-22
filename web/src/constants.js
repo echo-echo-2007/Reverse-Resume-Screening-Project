@@ -34,7 +34,8 @@ export const EXP_OPTIONS = [
 ];
 
 export const STATUS_LABEL = {
-  pending: '待初筛',
+  // 投递时后端已自动跑过硬条件初筛，pending = 通过初筛、等 HR 处理
+  pending: '待处理',
   screened: '初筛通过',
   rejected: '已拒绝',
   interview: '面试中',
@@ -61,6 +62,15 @@ export const REJECT_REASON_LABEL = {
   city: '城市不符',
   other: '其他',
 };
+
+// 职位状态（V1 创建即发布，其余值留给后续版本）
+export const JOB_STATUS_LABEL = {
+  draft: '草稿',
+  published: '在招',
+  closed: '已关闭',
+};
+
+// 投递管理的状态筛选卡在页面内定义（要带顺序和「全部」项），这里不再保留一份
 
 export function formatSalary(min, max) {
   if (!min && !max) return '薪资面议';

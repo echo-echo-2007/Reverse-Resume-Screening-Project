@@ -6,7 +6,9 @@ import JobList from './pages/JobList.jsx';
 import JobDetail from './pages/JobDetail.jsx';
 import MyResume from './pages/MyResume.jsx';
 import MyApplications from './pages/MyApplications.jsx';
-import ComingSoon from './pages/ComingSoon.jsx';
+import HrDashboard from './pages/hr/HrDashboard.jsx';
+import JobForm from './pages/hr/JobForm.jsx';
+import HrApplications from './pages/hr/HrApplications.jsx';
 
 // 已登录用户访问 /login 时直接回首页
 function LoginRoute() {
@@ -61,7 +63,23 @@ export default function App() {
           path="hr"
           element={
             <RequireRole need="hr">
-              <ComingSoon title="HR 工作台" items={['本企业职位列表', '新建职位', '编辑职位']} />
+              <HrDashboard />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="hr/jobs/new"
+          element={
+            <RequireRole need="hr">
+              <JobForm />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="hr/jobs/:id/edit"
+          element={
+            <RequireRole need="hr">
+              <JobForm />
             </RequireRole>
           }
         />
@@ -69,7 +87,7 @@ export default function App() {
           path="hr/applications"
           element={
             <RequireRole need="hr">
-              <ComingSoon title="投递管理" items={['按职位查看投递', '查看简历', '状态流转', '触发初筛']} />
+              <HrApplications />
             </RequireRole>
           }
         />
