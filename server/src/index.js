@@ -11,6 +11,7 @@ const { router: authRouter } = require('./auth');
 const { router: jobsRouter } = require('./jobs');
 const { router: resumeRouter } = require('./resume');
 const { router: applicationsRouter } = require('./applications');
+const { router: hrRouter } = require('./hr');
 
 const app = express();
 
@@ -25,6 +26,7 @@ app.use('/api', authRouter);
 app.use('/api', jobsRouter);
 app.use('/api', resumeRouter);
 app.use('/api', applicationsRouter);
+app.use('/api', hrRouter);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

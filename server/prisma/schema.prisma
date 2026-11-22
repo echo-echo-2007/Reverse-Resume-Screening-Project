@@ -21,7 +21,9 @@ model applications {
   applied_at     DateTime  @default(now()) @db.DateTime(0)
   screened_at    DateTime? @db.DateTime(0)
   hr_viewed_at   DateTime? @db.DateTime(0)
-  updated_at     DateTime  @default(now()) @db.DateTime(0)
+  // @updatedAt：Prisma 在每次 update 时自动写入。数据库列本身没有 ON UPDATE，
+  // 之前漏了这个注解，导致改状态后 updated_at 一直是投递时间。
+  updated_at     DateTime  @default(now()) @updatedAt @db.DateTime(0)
   jobs           jobs      @relation(fields: [job_id], references: [id], onUpdate: Restrict, map: "fk_applications_job")
   resumes        resumes   @relation(fields: [resume_id, seeker_user_id], references: [id, user_id], onUpdate: Restrict, map: "fk_applications_resume_owner")
 

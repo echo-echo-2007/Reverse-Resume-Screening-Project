@@ -1,6 +1,12 @@
 const express = require('express');
 const prisma = require('./db');
 const { requireAuth, requireRole } = require('./auth');
+const {
+  JOB_SCREEN_SELECT,
+  RESUME_SCREEN_SELECT,
+  screenFields,
+  visibleFromHr,
+} = require('./screening');
 
 const router = express.Router();
 
@@ -31,6 +37,9 @@ const APPLICATION_SELECT = {
 };
 
 // POST /api/jobs/:id/apply  投递职位（求职者）
+// 投递当场跑一遍硬条件初筛（后端自动，HR 不感知）：
+//   通过 -> pending，进入 HR 待处理队列；
+//   不通过 -> rejected + reject_stage='sql'，HR 端完全看不到这条记录。
 router.post('/jobs/:id/apply', requireAuth, requireRole('seeker'), async (req, res) => {
   try {
     const jobId = parseId(req.params.id);
@@ -38,7 +47,7 @@ router.post('/jobs/:id/apply', requireAuth, requireRole('seeker'), async (req, r
 
     const job = await prisma.jobs.findUnique({
       where: { id: jobId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, ...JOB_SCREEN_SELECT },
     });
     if (!job) return res.status(404).json({ error: '职位不存在' });
     if (job.status !== 'published') {
@@ -47,7 +56,7 @@ router.post('/jobs/:id/apply', requireAuth, requireRole('seeker'), async (req, r
 
     const resume = await prisma.resumes.findUnique({
       where: { user_id: req.user.userId },
-      select: { id: true },
+      select: { id: true, ...RESUME_SCREEN_SELECT },
     });
     if (!resume) return res.status(400).json({ error: '请先完善简历再投递' });
 
@@ -57,12 +66,13 @@ router.post('/jobs/:id/apply', requireAuth, requireRole('seeker'), async (req, r
     });
     if (existed) return res.status(409).json({ error: '已投递过该职位，不能重复投递' });
 
+    // 判定和写库放在一起，避免出现「投递成功但没筛」的中间态
     const application = await prisma.applications.create({
       data: {
         job_id: jobId,
         resume_id: resume.id,
         seeker_user_id: req.user.userId,
-        status: 'pending',
+        ...screenFields(job, resume),
       },
       select: APPLICATION_SELECT,
     });
@@ -122,7 +132,8 @@ router.get('/jobs/:id/applications', requireAuth, requireRole('hr'), async (req,
     }
 
     const applications = await prisma.applications.findMany({
-      where: { job_id: jobId },
+      // 被系统初筛拒掉的投递对 HR 不可见
+      where: { job_id: jobId, ...visibleFromHr() },
       select: {
         ...APPLICATION_SELECT,
         resumes: {
@@ -181,6 +192,8 @@ router.patch('/applications/:id/status', requireAuth, requireRole('hr'), async (
       data.reject_stage = 'manual';
       data.reject_reason = reason;
       data.reject_note = reject_note ? String(reject_note).slice(0, 255) : null;
+      // 抽屉里「处理于」用的就是这个字段，HR 拒绝也要落时间
+      data.screened_at = new Date();
     } else {
       // 转为通过类状态时清空拒绝信息
       data.reject_stage = null;
