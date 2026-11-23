@@ -414,7 +414,12 @@ def build_document():
 
 
 if __name__ == "__main__":
+    from pathlib import Path
+
+    # 脚本在 设计文档/_tools/ 下，往上三级才是项目根；用 __file__ 定位，
+    # 这样在任何目录下执行都会写回 docs/，不会多出一个 _tools/docs/
+    ROOT = Path(__file__).resolve().parents[2]
     document = build_document()
-    output = "docs/BOSS端数据库第一阶段最终方案.docx"
+    output = ROOT / "docs" / "BOSS端数据库第一阶段最终方案.docx"
     document.save(output)
     print(output)
