@@ -81,6 +81,8 @@ export const api = {
 
   // HR 工作台
   hrOverview: () => request('/hr/overview'),
+  // 投递管理首页：职位 × 状态汇总（不含明细）
+  hrBreakdown: () => request('/hr/breakdown'),
   hrApplications: (params = {}) => request(`/hr/applications${qs(params)}`),
   hrApplicationDetail: (id) => request(`/hr/applications/${id}`),
 };

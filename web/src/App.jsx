@@ -9,6 +9,7 @@ import MyApplications from './pages/MyApplications.jsx';
 import HrDashboard from './pages/hr/HrDashboard.jsx';
 import JobForm from './pages/hr/JobForm.jsx';
 import HrApplications from './pages/hr/HrApplications.jsx';
+import HrJobApplications from './pages/hr/HrJobApplications.jsx';
 
 // 已登录用户访问 /login 时直接回首页
 function LoginRoute() {
@@ -88,6 +89,14 @@ export default function App() {
           element={
             <RequireRole need="hr">
               <HrApplications />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="hr/applications/:jobId"
+          element={
+            <RequireRole need="hr">
+              <HrJobApplications />
             </RequireRole>
           }
         />
