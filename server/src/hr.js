@@ -43,6 +43,70 @@ const emptyStats = () => ({
   rejected: 0,
 });
 
+const STATUS_KEYS = ['pending', 'screened', 'interview', 'hired', 'rejected'];
+
+// 职位列表 + 「职位 × 状态」矩阵 + 全局状态数
+// 投递管理首页（只显示这张职位表）与单职位投递列表页共用这一份口径，
+// 避免两个页面各算一套、数字对不上。
+async function loadBreakdown(companyId) {
+  const [jobs, byJobStatus] = await Promise.all([
+    prisma.jobs.findMany({
+      where: { company_id: companyId },
+      select: { id: true, title: true, status: true, city_name: true },
+      orderBy: { created_at: 'desc' },
+    }),
+    prisma.applications.groupBy({
+      by: ['job_id', 'status'],
+      where: { jobs: { company_id: companyId }, ...visibleFromHr() },
+      _count: { _all: true },
+    }),
+  ]);
+
+  const stats = emptyStats();
+  stats.open_jobs = jobs.filter((j) => j.status === 'published').length;
+
+  // 先把职位全部铺进去，没有投递的职位也要出现在表里（显示 0）
+  const jobStats = jobs.map((j) => ({
+    job_id: j.id,
+    title: j.title,
+    status: j.status,
+    city_name: j.city_name,
+    total: 0,
+    pending: 0,
+    screened: 0,
+    interview: 0,
+    hired: 0,
+    rejected: 0,
+  }));
+  const jobStatsMap = new Map(jobStats.map((r) => [String(r.job_id), r]));
+
+  for (const row of byJobStatus) {
+    const count = row._count._all;
+    const entry = jobStatsMap.get(String(row.job_id));
+    if (entry) {
+      entry.total += count;
+      if (STATUS_KEYS.includes(row.status)) entry[row.status] = count;
+    }
+    if (STATUS_KEYS.includes(row.status)) stats[row.status] += count;
+  }
+
+  return { jobs, job_stats: jobStats, stats };
+}
+
+// GET /api/hr/breakdown  投递管理首页：职位表 + 全局状态数（不含投递明细）
+router.get('/hr/breakdown', async (req, res) => {
+  try {
+    if (!req.user.companyId) {
+      return res.json({ jobs: [], job_stats: [], stats: emptyStats() });
+    }
+    const data = await loadBreakdown(BigInt(req.user.companyId));
+    return res.json(data);
+  } catch (err) {
+    console.error('[hr.breakdown]', err);
+    return res.status(500).json({ error: '获取职位投递统计失败' });
+  }
+});
+
 // GET /api/hr/overview  工作台：5 个统计数字 + 本企业全部职位
 // 口径：只统计 HR 可见的投递（被系统初筛拒掉的不进入任何数字）
 // TODO: 统计与职位列表目前一次拉全量，职位多了要加分页或汇总表
@@ -135,7 +199,7 @@ router.get('/hr/applications', async (req, res) => {
     // 只开放两种排序：投递时间新→旧 / 旧→新；同秒投递用 id 兜底保证翻页稳定
     const order = req.query.sort === 'applied_asc' ? 'asc' : 'desc';
 
-    const [applications, total, jobs, byJobStatus] = await Promise.all([
+    const [applications, total, breakdown] = await Promise.all([
       prisma.applications.findMany({
         where,
         select: {
@@ -169,51 +233,15 @@ router.get('/hr/applications', async (req, res) => {
         take: pageSize,
       }),
       prisma.applications.count({ where }),
-      prisma.jobs.findMany({
-        where: { company_id: companyId },
-        select: { id: true, title: true, status: true },
-        orderBy: { created_at: 'desc' },
-      }),
-      // 按「职位 × 状态」聚合一次，页面的统计卡和职位细分表都从这份数据算
-      prisma.applications.groupBy({
-        by: ['job_id', 'status'],
-        where: { jobs: { company_id: companyId }, ...visibleFromHr() },
-        _count: { _all: true },
-      }),
+      // 职位下拉与「职位 × 状态」矩阵：明细页的状态胶囊数字从这份数据取
+      loadBreakdown(companyId),
     ]);
-
-    const stats = emptyStats();
-    stats.open_jobs = jobs.filter((j) => j.status === 'published').length;
-
-    // 先把职位全部铺进去，没有投递的职位也要出现在细分表里（显示 0）
-    const jobStats = jobs.map((j) => ({
-      job_id: j.id,
-      title: j.title,
-      status: j.status,
-      total: 0,
-      pending: 0,
-      screened: 0,
-      interview: 0,
-      hired: 0,
-      rejected: 0,
-    }));
-    const jobStatsMap = new Map(jobStats.map((r) => [String(r.job_id), r]));
-
-    for (const row of byJobStatus) {
-      const count = row._count._all;
-      const entry = jobStatsMap.get(String(row.job_id));
-      if (entry) {
-        entry.total += count;
-        if (row.status in entry && row.status !== 'total') entry[row.status] = count;
-      }
-      if (row.status in stats) stats[row.status] += count;
-    }
 
     return res.json({
       applications,
-      jobs,
-      job_stats: jobStats,
-      stats,
+      jobs: breakdown.jobs,
+      job_stats: breakdown.job_stats,
+      stats: breakdown.stats,
       total,
       page,
       page_size: pageSize,
